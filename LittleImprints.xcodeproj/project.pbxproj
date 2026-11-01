@@ -189,6 +189,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.getperkwatch.littleimprints;
+				SDKROOT = iphoneos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "Little Imprints App Store";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -218,6 +219,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.getperkwatch.littleimprints;
+				SDKROOT = iphoneos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "Little Imprints App Store";
 				SWIFT_EMIT_LOC_STRINGS = YES;
