@@ -6,7 +6,7 @@
 
 import SwiftUI
 
-struct TimelineView: View {
+struct GrowthTimelineView: View {
     @EnvironmentObject var store: LibraryStore
     @Binding var selectedTab: AppTab
     @State private var scalePct: Double = 0 // 0 = fit-to-view default, resolved on appear

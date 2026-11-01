@@ -20,7 +20,7 @@ struct RootView: View {
             KeepsakeBookView(selectedTab: $tab)
                 .tabItem { Label("Book", systemImage: "book.closed.fill") }
                 .tag(AppTab.book)
-            TimelineView(selectedTab: $tab)
+            GrowthTimelineView(selectedTab: $tab)
                 .tabItem { Label("Growth", systemImage: "ruler.fill") }
                 .tag(AppTab.timeline)
             PagesView(selectedTab: $tab)

@@ -12,7 +12,9 @@ public struct ChildProfile: Codable, Identifiable, Equatable {
         self.id = id; self.name = name; self.birthDate = birthDate
     }
     public func ageText(at date: Date) -> String {
-        ageText(birth: birthDate, at: date)
+        // Module-qualified: the unqualified name resolves to this
+        // very method and shadows the global function.
+        LittleImprints.ageText(birth: birthDate, at: date)
     }
 }
 
