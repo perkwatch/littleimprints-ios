@@ -348,32 +348,50 @@ public enum PrintBuild {
         guard frameW > 10, frameH > 10 else { return false }
 
         let prior = shapePrior(kind: kind, ageMonths: ageMonths)
-        // Try both orientations; use whichever matches at all.
-        var best: (missing: Int, mirror: Bool)? = nil
+        // Try both orientations, and — because a missing digit
+        // shrinks the mask's own box at the digit end — a small
+        // search of top extensions of the frame. Scored by how
+        // coherently the anatomy reads (palm coverage + digits
+        // clearly present); a fill is only ever taken from the
+        // best-scoring coherent mapping. (First cut mapped the
+        // prior into the raw mask box: with one toe gone every
+        // ellipse shifted, nothing read as missing, and with two
+        // gone a wrong mapping could read exactly one as missing.)
+        var best: (missing: Int, mirror: Bool, origin: Point2, w: Double, hh: Double)? = nil
+        var bestScore = -1.0
         for mirror in [false, true] {
-            let palmCov = ellipseCoverage(mask: mask, nx: nx, ny: ny, h: h,
-                                          frameOrigin: frameOrigin, frameW: frameW, frameH: frameH,
-                                          spot: prior.palm, mirrorX: mirror)
-            guard palmCov >= 0.45 else { continue }
-            var missing: [Int] = []
-            for (idx, d) in prior.digits.enumerated() {
-                let cov = ellipseCoverage(mask: mask, nx: nx, ny: ny, h: h,
-                                          frameOrigin: frameOrigin, frameW: frameW, frameH: frameH,
-                                          spot: d, mirrorX: mirror)
-                if cov <= 0.15 { missing.append(idx) }
-                else if cov < 0.40 { missing.append(-1) } // ambiguous — blocks any fill
-            }
-            if missing.count == 1, missing[0] >= 0 {
-                best = (missing[0], mirror)
-                break
+            for extFrac in [0.0, 0.06, 0.12, 0.18, 0.24] {
+                let ext = frameH * extFrac
+                let o = Point2(frameOrigin.x, frameOrigin.y - ext)
+                let fh = frameH + ext
+                let palmCov = ellipseCoverage(mask: mask, nx: nx, ny: ny, h: h,
+                                              frameOrigin: o, frameW: frameW, frameH: fh,
+                                              spot: prior.palm, mirrorX: mirror)
+                guard palmCov >= 0.45 else { continue }
+                var missing: [Int] = []
+                var present = 0
+                for (idx, d) in prior.digits.enumerated() {
+                    let cov = ellipseCoverage(mask: mask, nx: nx, ny: ny, h: h,
+                                              frameOrigin: o, frameW: frameW, frameH: fh,
+                                              spot: d, mirrorX: mirror)
+                    if cov <= 0.15 { missing.append(idx) }
+                    else if cov < 0.40 { missing.append(-1) } // ambiguous — blocks
+                    else { present += 1 }
+                }
+                guard missing.count == 1, missing[0] >= 0 else { continue }
+                let score = palmCov + 0.1 * Double(present)
+                if score > bestScore {
+                    bestScore = score
+                    best = (missing[0], mirror, o, frameW, fh)
+                }
             }
         }
         guard let fill = best else { return false }
         let spot = prior.digits[fill.missing]
-        let cx = frameOrigin.x + (fill.mirror ? 1 - spot.center.x : spot.center.x) * frameW
-        let cy = frameOrigin.y + spot.center.y * frameH
-        let rx = max(spot.radii.x * frameW * 0.92, 2)
-        let ry = max(spot.radii.y * frameH * 0.92, 2)
+        let cx = fill.origin.x + (fill.mirror ? 1 - spot.center.x : spot.center.x) * fill.w
+        let cy = fill.origin.y + spot.center.y * fill.hh
+        let rx = max(spot.radii.x * fill.w * 0.92, 2)
+        let ry = max(spot.radii.y * fill.hh * 0.92, 2)
         let ang = spot.angleDeg * Double.pi / 180 * (fill.mirror ? -1 : 1)
         let cosA = cos(ang), sinA = sin(ang)
         let reach = rx + ry
