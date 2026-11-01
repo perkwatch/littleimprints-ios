@@ -16,6 +16,7 @@ struct NightstandWalkView: View {
     @State private var shown: Int = 0
     @State private var fading: Bool = false
     @State private var showHint: Bool = true
+    @State private var usingPlaceholders: Bool = false
 
     var body: some View {
         ZStack {
@@ -62,6 +63,17 @@ struct NightstandWalkView: View {
                 if showHint {
                     VStack {
                         Spacer()
+                        if usingPlaceholders {
+                            // Honesty on screen: before the first
+                            // real print, the walk uses starter
+                            // prints — and says so, out loud.
+                            Text("These are starter prints — her own footprints will walk here once you've made one.")
+                                .font(.system(.footnote, design: .rounded))
+                                .foregroundColor(.white.opacity(0.45))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 40)
+                                .padding(.bottom, 6)
+                        }
                         Text("Tap anywhere to close")
                             .font(.system(.footnote, design: .rounded))
                             .foregroundColor(.white.opacity(0.4))
@@ -94,8 +106,9 @@ struct NightstandWalkView: View {
         }
         if images.isEmpty {
             // Before the first real print: gentle placeholders in a
-            // warm sand ink, clearly a placeholder scene — the walk
-            // fills with her real prints as the book grows.
+            // warm sand ink, labeled on screen as starter prints —
+            // the walk fills with her real prints as the book grows.
+            usingPlaceholders = true
             let months = child.map { ageInMonths(birth: $0.birthDate, at: Date()) } ?? 3.5
             let shape = PrintRenderer.silhouetteShape(kind: .foot, ageMonths: months,
                                                       lengthMM: 88,

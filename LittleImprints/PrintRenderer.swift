@@ -57,6 +57,73 @@ public enum PrintRenderer {
         return cropped(img, shape: record.shape)
     }
 
+    /// Crops a baked image to its actual ink by scanning the alpha
+    /// channel — exact regardless of the rotation/nudge adjustments
+    /// baked into the image (the shape-rect crop above is only exact
+    /// for the as-pressed render). Used for display crops.
+    public static func contentCropped(_ image: UIImage) -> UIImage? {
+        guard let cg = image.cgImage else { return image }
+        let maxSide = 220
+        let f = Double(maxSide) / Double(max(cg.width, cg.height))
+        let w = max(1, Int(Double(cg.width) * f)), h = max(1, Int(Double(cg.height) * f))
+        var px = [UInt8](repeating: 0, count: w * h)
+        guard let ctx = CGContext(data: &px, width: w, height: h,
+                                  bitsPerComponent: 8, bytesPerRow: w,
+                                  space: CGColorSpaceCreateDeviceGray(),
+                                  bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue)
+        else { return image }
+        ctx.translateBy(x: 0, y: CGFloat(h))
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var minI = w, minJ = h, maxI = -1, maxJ = -1
+        for j in 0..<h {
+            for i in 0..<w where px[j * w + i] > 8 {
+                minI = min(minI, i); maxI = max(maxI, i)
+                minJ = min(minJ, j); maxJ = max(maxJ, j)
+            }
+        }
+        guard maxI >= 0 else { return image }
+        let cellW = Double(cg.width) / Double(w), cellH = Double(cg.height) / Double(h)
+        let rect = CGRect(x: Double(minI) * cellW - cellW, y: Double(minJ) * cellH - cellH,
+                          width: Double(maxI - minI + 1) * cellW + 2 * cellW,
+                          height: Double(maxJ - minJ + 1) * cellH + 2 * cellH)
+            .integral
+            .intersection(CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
+        guard rect.width > 2, rect.height > 2,
+              let cut = cg.cropping(to: rect) else { return image }
+        return UIImage(cgImage: cut, scale: image.scale, orientation: image.imageOrientation)
+    }
+
+    /// Display crop of a kept print (adjustments included, ink-exact).
+    public static func displayCroppedImage(for record: PrintRecord,
+                                           background: InkColor? = nil,
+                                           longEdgePx: Int = 900) -> UIImage? {
+        guard let img = image(for: record, background: background,
+                              longEdgePx: longEdgePx) else { return nil }
+        return contentCropped(img)
+    }
+
+    /// The print exactly as pressed — kept rotation/nudge are
+    /// presentation adjustments, and size-claiming exports (the
+    /// true-size PDF) use this as-pressed geometry so the stored
+    /// millimetres describe the ink exactly.
+    public static func asPressed(_ record: PrintRecord) -> PrintRecord {
+        var r = record
+        r.rotationDeg = 0
+        r.offset = Point2(0, 0)
+        return r
+    }
+
+    /// As-pressed render cropped by the shape's own geometry —
+    /// dimensionally exact (this is what the PDF draws).
+    public static func exactCroppedImage(for record: PrintRecord,
+                                         longEdgePx: Int = 2048) -> UIImage? {
+        let pressed = asPressed(record)
+        guard let img = image(for: pressed, background: nil,
+                              longEdgePx: longEdgePx) else { return nil }
+        return cropped(img, shape: pressed.shape)
+    }
+
     /// A print rendered straight from a shape (silhouette previews,
     /// the Nightstand Walk's placeholder prints).
     public static func image(shape: PrintShape, color: InkColor,
@@ -284,6 +351,22 @@ public enum PrintRenderer {
         if let bg = background {
             ctx.setFillColor(cgColor(bg))
             ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
+            // Paper grain (§2.3): a whisper of seeded speckle over
+            // the sheet so exports sit on paper, not on flat color.
+            // Deterministic per print (seeded from its geometry).
+            var grain = SplitMix64(seed: UInt64(abs(shape.canvasW * 131 + shape.canvasH * 17)) &+ 0x6A17)
+            let dots = max(300, (W * H) / 850)
+            for _ in 0..<dots {
+                let gx = grain.nextDouble() * Double(W)
+                let gy = grain.nextDouble() * Double(H)
+                let r = 0.5 + grain.nextDouble() * 1.1
+                let dark = grain.nextDouble() > 0.42
+                ctx.setFillColor(CGColor(red: dark ? 0.45 : 1.0,
+                                         green: dark ? 0.38 : 0.99,
+                                         blue: dark ? 0.30 : 0.94,
+                                         alpha: CGFloat(0.028 + grain.nextDouble() * 0.03)))
+                ctx.fillEllipse(in: CGRect(x: gx - r, y: gy - r, width: r * 2, height: r * 2))
+            }
         }
         let cx = Double(W) / 2, cy = Double(H) / 2
         let s = Double(W) / shape.canvasW

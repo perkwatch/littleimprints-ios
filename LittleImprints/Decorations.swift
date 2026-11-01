@@ -22,6 +22,7 @@ public enum StampCatalog {
         ("Butterfly", "drawn-butterfly"),
         ("Bow", "drawn-bow"),
         ("Flower", "drawn-flower"),
+        ("Bee", "drawn-bee"),
     ]
     public static let frameStyles: [(name: String, symbol: String)] = [
         ("Thin line", "thin"),
@@ -99,6 +100,45 @@ struct FlowerShape: Shape {
     }
 }
 
+/// A bee: round body, head, two wings, a small stinger —
+/// a single-color silhouette that still reads as a bee.
+struct BeeShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let cx = rect.midX, cy = rect.midY + rect.height * 0.08
+        // Wings (behind the body, poking up both sides).
+        for side in [-1.0, 1.0] {
+            p.addEllipse(in: CGRect(x: cx + side * rect.width * 0.20 - rect.width * 0.14,
+                                    y: cy - rect.height * 0.46,
+                                    width: rect.width * 0.28, height: rect.height * 0.30))
+        }
+        // Body + head.
+        p.addEllipse(in: CGRect(x: cx - rect.width * 0.30, y: cy - rect.height * 0.24,
+                                width: rect.width * 0.60, height: rect.height * 0.52))
+        p.addEllipse(in: CGRect(x: cx - rect.width * 0.13, y: cy - rect.height * 0.44,
+                                width: rect.width * 0.26, height: rect.height * 0.26))
+        // Stinger.
+        var s = Path()
+        s.move(to: CGPoint(x: cx - rect.width * 0.07, y: cy + rect.height * 0.24))
+        s.addLine(to: CGPoint(x: cx + rect.width * 0.07, y: cy + rect.height * 0.24))
+        s.addLine(to: CGPoint(x: cx, y: cy + rect.height * 0.42))
+        s.closeSubpath()
+        return p.union(s)
+    }
+}
+
+extension DecorationLayer {
+    /// The SwiftUI design matching fontStyle (kept here, not in
+    /// Models, so the model layer stays Foundation-only).
+    var fontDesign: Font.Design {
+        switch fontStyle {
+        case "serif": return .serif
+        case "typewriter": return .monospaced
+        default: return .rounded
+        }
+    }
+}
+
 /// One decoration layer rendered on the page canvas.
 struct DecorationView: View {
     let layer: DecorationLayer
@@ -114,7 +154,7 @@ struct DecorationView: View {
             case .text:
                 Text(layer.text)
                     .font(.system(size: max(13, w / max(6, Double(layer.text.count) * 0.62)),
-                                  design: .rounded).weight(.semibold))
+                                  design: layer.fontDesign).weight(.semibold))
                     .foregroundColor(Color(layer.color))
                     .lineLimit(1)
                     .frame(width: w * 1.9)
@@ -140,6 +180,8 @@ struct DecorationView: View {
             BowShape().fill(Color(layer.color))
         case "drawn-flower":
             FlowerShape().fill(Color(layer.color))
+        case "drawn-bee":
+            BeeShape().fill(Color(layer.color))
         default:
             Image(systemName: layer.symbol)
                 .resizable()

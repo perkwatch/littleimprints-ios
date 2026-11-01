@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var showNightstand = false
     @State private var newChildName = ""
     @State private var newChildBirth = Date()
+    @State private var childToDelete: ChildProfile? = nil
 
     var body: some View {
         NavigationStack {
@@ -29,6 +30,20 @@ struct SettingsView: View {
             .fullScreenCover(isPresented: $showNightstand) {
                 NightstandWalkView()
             }
+            .confirmationDialog(
+                childToDelete.map { "Remove \($0.name) and their whole book?" } ?? "",
+                isPresented: Binding(get: { childToDelete != nil },
+                                     set: { if !$0 { childToDelete = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Remove everything", role: .destructive) {
+                    if let child = childToDelete { store.deleteChild(child.id) }
+                    childToDelete = nil
+                }
+                Button("Keep it", role: .cancel) { childToDelete = nil }
+            } message: {
+                Text("Their prints and pages are removed from this phone. This can't be undone.")
+            }
         }
     }
 
@@ -39,7 +54,7 @@ struct SettingsView: View {
             ForEach(store.library.children) { child in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text(child.name)
+                        TextField("Name", text: nameBinding(child))
                             .font(.system(.headline, design: .rounded))
                             .foregroundColor(.inkSoft)
                         Spacer()
@@ -55,9 +70,14 @@ struct SettingsView: View {
                     DatePicker("Birthday", selection: birthBinding(child),
                                in: ...Date(), displayedComponents: .date)
                         .font(.system(.subheadline, design: .rounded))
-                    Text(child.ageText(at: Date()))
-                        .font(.footnote)
-                        .foregroundColor(.inkFaint)
+                    HStack {
+                        Text(child.ageText(at: Date()))
+                            .font(.footnote)
+                            .foregroundColor(.inkFaint)
+                        Spacer()
+                        Button("Remove…", role: .destructive) { childToDelete = child }
+                            .font(.system(.footnote, design: .rounded))
+                    }
                 }
                 .padding(.vertical, 4)
             }
@@ -82,6 +102,18 @@ struct SettingsView: View {
         } footer: {
             Text("Each child gets their own book, their own timeline, their own ages — computed from the birthday you set here.")
         }
+    }
+
+    private func nameBinding(_ child: ChildProfile) -> Binding<String> {
+        Binding(
+            get: { store.library.children.first { $0.id == child.id }?.name ?? child.name },
+            set: { v in
+                store.mutate { lib in
+                    if let i = lib.children.firstIndex(where: { $0.id == child.id }) {
+                        lib.children[i].name = v
+                    }
+                }
+            })
     }
 
     private func birthBinding(_ child: ChildProfile) -> Binding<Date> {

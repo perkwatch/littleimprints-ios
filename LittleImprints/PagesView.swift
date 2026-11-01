@@ -96,6 +96,7 @@ struct PageEditorView: View {
     @State private var showAddStamp = false
     @State private var showAddWords = false
     @State private var wordsText = ""
+    @State private var wordsFont = "rounded"
     @State private var sharePayload: SharePayload? = nil
     @State private var dragStart: Point2? = nil
 
@@ -456,6 +457,7 @@ struct PageEditorView: View {
         case "drawn-butterfly": ButterflyShape().fill(Color.inkPlum)
         case "drawn-bow": BowShape().fill(Color.inkPlum)
         case "drawn-flower": FlowerShape().fill(Color.inkPlum)
+        case "drawn-bee": BeeShape().fill(Color.inkPlum)
         default:
             Image(systemName: symbol)
                 .resizable().scaledToFit()
@@ -490,12 +492,25 @@ struct PageEditorView: View {
                         .background(Color.paperCard)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.lineSoft))
+                    HStack(spacing: 8) {
+                        ForEach([("Rounded", "rounded"), ("Serif", "serif"),
+                                 ("Typewriter", "typewriter")], id: \.1) { option in
+                            Button(option.0) { wordsFont = option.1 }
+                                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                                .padding(.horizontal, 13).padding(.vertical, 8)
+                                .background(wordsFont == option.1 ? Color.inkPlum : Color.paperCard)
+                                .foregroundColor(wordsFont == option.1 ? .white : .inkPlum)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(Color.lineSoft))
+                        }
+                        Spacer()
+                    }
                     BigButton(title: "Put it on the page") {
                         let t = wordsText.trimmingCharacters(in: .whitespaces)
                         guard !t.isEmpty else { return }
                         update { pg in
                             pg.decorations.append(DecorationLayer(
-                                kind: .text, text: t, color: .plum,
+                                kind: .text, text: t, color: .plum, fontStyle: wordsFont,
                                 center: Point2(0.5, 0.86), scale: 0.30))
                         }
                         wordsText = ""
@@ -522,9 +537,19 @@ struct PageEditorView: View {
         update { pg in
             let color = pg.prints.last
                 .flatMap { store.printRecord(id: $0.printID) }?.color ?? .plum
+            // Land beside the first print when the page has one —
+            // decorations sit beside/around the print (§4), not at
+            // a fixed corner regardless of what's on the page.
+            let spot: Point2
+            if let first = pg.prints.first {
+                spot = Point2(clampD(first.center.x + 0.20, 0.08, 0.92),
+                              clampD(first.center.y - 0.16, 0.08, 0.92))
+            } else {
+                spot = Point2(0.22, 0.20)
+            }
             pg.decorations.append(DecorationLayer(
                 kind: .stamp, symbol: symbol, color: color,
-                center: Point2(0.22, 0.20), scale: 0.16))
+                center: spot, scale: 0.16))
         }
     }
 

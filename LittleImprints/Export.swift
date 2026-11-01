@@ -36,41 +36,52 @@ public enum Exporter {
 
     // MARK: True-size PDF
 
-    /// A letter page carrying the print at its REAL size — the
-    /// number one keepsake export. Points are 1/72 inch, so the
-    /// print's stored millimetres convert exactly.
-    public static func pdfData(for record: PrintRecord, childName: String) -> Data? {
-        let page = CGRect(x: 0, y: 0, width: 612, height: 792) // US Letter
+    /// A page carrying the print at its REAL size — the number one
+    /// keepsake export. Points are 1/72 inch, so the print's stored
+    /// millimetres convert exactly. The image drawn is cropped to
+    /// the print's own bounding box (the earlier version drew the
+    /// whole padded canvas into the print's box — the ink landed
+    /// ~10% small and stretched; review finding, fixed). The print
+    /// is drawn as pressed: kept rotation/nudge are presentation
+    /// adjustments, and the stored millimetres describe the
+    /// as-pressed ink exactly.
+    public static func pdfData(for record: PrintRecord, childName: String,
+                               a4: Bool = false) -> Data? {
+        let page = a4 ? CGRect(x: 0, y: 0, width: 595, height: 842)
+                      : CGRect(x: 0, y: 0, width: 612, height: 792)
         let renderer = UIGraphicsPDFRenderer(bounds: page)
-        guard let img = transparentImage(for: record) else { return nil }
+        guard let img = PrintRenderer.exactCroppedImage(for: record) else { return nil }
         return renderer.pdfData { ctx in
             ctx.beginPage()
             UIColor.white.setFill()
             ctx.fill(page)
-            let cg = ctx.cgContext
             let ptPerMM = 72.0 / 25.4
             let wPT = CGFloat(record.shape.widthMM * ptPerMM)
             let hPT = CGFloat(record.shape.heightMM * ptPerMM)
             let x = (page.width - wPT) / 2
-            let y: CGFloat = 110
+            // Captions ride below the print when they fit, above
+            // it when the print is tall.
+            let captionsBelow = hPT + 190 < page.height
+            let y = captionsBelow ? max(84, (page.height - hPT) * 0.36)
+                                  : page.height - 70 - hPT
             img.draw(in: CGRect(x: x, y: y, width: wPT, height: hPT))
-            _ = cg
             let center = NSMutableParagraphStyle()
             center.alignment = .center
             let titleFont = roundedFont(19, .semibold)
             let subFont = roundedFont(12.5, .regular)
             let name = childName.isEmpty ? "Baby" : childName
+            let capY = captionsBelow ? y + hPT + 26 : y - 108
             drawText("\(name) — \(record.ageLabel)",
-                     in: CGRect(x: 40, y: y + hPT + 26, width: page.width - 80, height: 28),
+                     in: CGRect(x: 40, y: capY, width: page.width - 80, height: 28),
                      font: titleFont, color: .darkText, style: center)
             let dateFmt = DateFormatter()
             dateFmt.dateStyle = .long
             drawText("\(record.kind.label) print · \(dateFmt.string(from: record.createdAt))",
-                     in: CGRect(x: 40, y: y + hPT + 56, width: page.width - 80, height: 22),
+                     in: CGRect(x: 40, y: capY + 30, width: page.width - 80, height: 22),
                      font: subFont, color: .gray, style: center)
             drawText(String(format: "Actual size — %.1f × %.1f mm",
                             record.shape.widthMM, record.shape.heightMM),
-                     in: CGRect(x: 40, y: y + hPT + 78, width: page.width - 80, height: 22),
+                     in: CGRect(x: 40, y: capY + 52, width: page.width - 80, height: 22),
                      font: subFont, color: .gray, style: center)
             drawText("Print at 100% — no scaling, no “fit to page.” This is the real size of the print.",
                      in: CGRect(x: 40, y: page.height - 54, width: page.width - 80, height: 20),
@@ -78,9 +89,29 @@ public enum Exporter {
         }
     }
 
+    /// The print on paper as a JPEG file (spec §6: PNG and JPEG) —
+    /// some family apps and printers prefer it.
+    public static func jpegFile(for record: PrintRecord) -> URL? {
+        guard let img = shareImage(for: record),
+              let data = img.jpegData(compressionQuality: 0.92) else { return nil }
+        return tempFile(data: data, name: "little-imprints-print.jpg")
+    }
+
     static func roundedFont(_ size: CGFloat, _ weight: UIFont.Weight) -> UIFont {
+        styledFont("rounded", size, weight)
+    }
+
+    /// The typeface for a text layer's fontStyle (§4's small set).
+    static func styledFont(_ style: String, _ size: CGFloat,
+                           _ weight: UIFont.Weight) -> UIFont {
+        let design: UIFontDescriptor.SystemDesign
+        switch style {
+        case "serif": design = .serif
+        case "typewriter": design = .monospaced
+        default: design = .rounded
+        }
         let base = UIFont.systemFont(ofSize: size, weight: weight)
-        if let desc = base.fontDescriptor.withDesign(.rounded) {
+        if let desc = base.fontDescriptor.withDesign(design) {
             return UIFont(descriptor: desc, size: size)
         }
         return base
@@ -221,6 +252,10 @@ public enum PageRenderer {
                 let rect = CGRect(x: -w / 2, y: -w / 2, width: w, height: w)
                 cg.addPath(FlowerShape().path(in: rect).cgPath)
                 uiColor.setFill(); cg.fillPath()
+            case "drawn-bee":
+                let rect = CGRect(x: -w / 2, y: -w / 2, width: w, height: w)
+                cg.addPath(BeeShape().path(in: rect).cgPath)
+                uiColor.setFill(); cg.fillPath()
             default:
                 let cfg = UIImage.SymbolConfiguration(pointSize: w, weight: .semibold)
                 if let img = UIImage(systemName: layer.symbol, withConfiguration: cfg)?
@@ -233,7 +268,7 @@ public enum PageRenderer {
             cg.addPath(ButterflyShape().path(in: rect).cgPath)
             uiColor.setFill(); cg.fillPath()
         case .text:
-            let font = Exporter.roundedFont(max(12, w / CGFloat(max(6, Double(layer.text.count) * 0.62))), .semibold)
+            let font = Exporter.styledFont(layer.fontStyle, max(12, w / CGFloat(max(6, Double(layer.text.count) * 0.62))), .semibold)
             let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: uiColor]
             let s = layer.text as NSString
             let ts = s.size(withAttributes: attrs)

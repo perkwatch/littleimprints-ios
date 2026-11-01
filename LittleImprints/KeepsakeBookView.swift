@@ -23,11 +23,13 @@ struct PrintThumb: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.lineSoft))
         .task(id: record.id) {
+            // Ink-exact content crop: the shape-rect crop could
+            // clip prints the parent rotated while keeping them.
             if let data = store.imageData(for: record.id), let ui = UIImage(data: data) {
-                img = PrintRenderer.cropped(ui, shape: record.shape)
+                img = PrintRenderer.contentCropped(ui)
                 return
             }
-            img = PrintRenderer.croppedImage(for: record, longEdgePx: 500)
+            img = PrintRenderer.displayCroppedImage(for: record, longEdgePx: 500)
         }
     }
 }
@@ -255,6 +257,17 @@ struct PrintDetailView: View {
             Text("\(record.material.label) · \(record.createdAt.formatted(date: .long, time: .shortened))")
                 .font(.footnote)
                 .foregroundColor(.inkFaint)
+            if record.shape.digitFilled {
+                // The standing disclosure (spec §2.2): the print's
+                // page always says when the prior completed a digit.
+                // (Was only shown on the pre-keep preview — review
+                // finding; Settings copy already promised it here.)
+                Text("One little digit didn't quite press, so this print was gently completed. Pure contact in Settings keeps prints exactly as pressed.")
+                    .font(.footnote)
+                    .foregroundColor(.inkSoft)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 4)
+            }
         }
     }
 
@@ -320,6 +333,11 @@ struct PrintDetailView: View {
                     sharePayload = SharePayload(items: [img])
                 }
             }
+            BigButton(title: "Share as JPEG", secondary: true) {
+                if let url = Exporter.jpegFile(for: record) {
+                    sharePayload = SharePayload(items: [url])
+                }
+            }
             BigButton(title: "Make it a wallpaper", secondary: true) {
                 showWallpaper = true
             }
@@ -329,6 +347,15 @@ struct PrintDetailView: View {
                 if let data = Exporter.pdfData(for: record, childName: childName),
                    let url = Exporter.tempFile(data: data,
                                                name: "little-imprints-true-size.pdf") {
+                    sharePayload = SharePayload(items: [url])
+                }
+            }
+            BigButton(title: "Print at real size (PDF, A4)", secondary: true) {
+                let childName = store.library.children
+                    .first(where: { $0.id == record.childID })?.name ?? ""
+                if let data = Exporter.pdfData(for: record, childName: childName, a4: true),
+                   let url = Exporter.tempFile(data: data,
+                                               name: "little-imprints-true-size-a4.pdf") {
                     sharePayload = SharePayload(items: [url])
                 }
             }
@@ -402,11 +429,11 @@ struct WallpaperView: View {
                         }
                         VStack(alignment: .leading, spacing: 6) {
                             SectionTitle(text: "Setting it, honestly")
-                            Text("Little Imprints can't set your wallpaper itself — iOS keeps that for you. Save the picture below, then open Settings → Wallpaper → Add New and pick it. It takes about twenty seconds, and then it's there every time you pick up the phone.")
+                            Text("Little Imprints can't set your wallpaper itself — iOS keeps that for you, and it can't save to Photos directly either. Tap the button below, choose Save Image in the sheet that opens, then open Settings → Wallpaper → Add New and pick it. It takes about twenty seconds, and then it's there every time you pick up the phone.")
                                 .font(.footnote)
                                 .foregroundColor(.inkSoft)
                         }
-                        BigButton(title: "Save the wallpaper picture") {
+                        BigButton(title: "Get the wallpaper picture") {
                             let img = trail
                                 ? Exporter.trailWallpaperImage(for: record, paper: paper)
                                 : Exporter.wallpaperImage(for: record, paper: paper)

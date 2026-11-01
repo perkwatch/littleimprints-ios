@@ -71,16 +71,21 @@ public struct DecorationLayer: Codable, Identifiable, Equatable {
     public var symbol: String
     public var text: String
     public var color: InkColor
+    /// Typeface for text layers: "rounded" | "serif" | "typewriter"
+    /// (spec §4's small set of warm typefaces). Defaulted so older
+    /// libraries decode unchanged.
+    public var fontStyle: String = "rounded"
     /// Center in page-normalized coordinates (0…1).
     public var center: Point2
     /// Layer size as a fraction of page width.
     public var scale: Double
     public var rotationDeg: Double
     public init(id: UUID = UUID(), kind: LayerKind, symbol: String = "",
-                text: String = "", color: InkColor,
+                text: String = "", color: InkColor, fontStyle: String = "rounded",
                 center: Point2, scale: Double, rotationDeg: Double = 0) {
         self.id = id; self.kind = kind; self.symbol = symbol
-        self.text = text; self.color = color; self.center = center
+        self.text = text; self.color = color; self.fontStyle = fontStyle
+        self.center = center
         self.scale = scale; self.rotationDeg = rotationDeg
     }
 }

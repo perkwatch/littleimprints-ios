@@ -91,7 +91,7 @@ public func allMilestones(birth: Date, calendar: Calendar = .current) -> [Milest
     let monthMarks: [(Int, String)] = [
         (1, "One month"), (2, "Two months"), (3, "Three months"),
         (4, "Four months"), (6, "Six months"), (9, "Nine months"),
-        (12, "One year"), (18, "18 months"), (24, "Two years"),
+        (12, "One year"), (18, "Eighteen months"), (24, "Two years"),
     ]
     for (m, title) in monthMarks {
         if let d = calendar.date(byAdding: .month, value: m, to: birth) {

@@ -20,6 +20,7 @@ struct CaptureView: View {
     @State private var newBirth: Date = Date()
 
     @State private var sampleCount: Int = 0
+    @State private var padPulse: Bool = false
     @StateObject private var padControl = PadControl()
 
     @State private var draft: PrintRecord? = nil
@@ -241,17 +242,28 @@ struct CaptureView: View {
                     .foregroundColor(.inkPlum)
                     .multilineTextAlignment(.center)
                     .padding(.top, 26)
+                    .allowsHitTesting(false)
                 Spacer()
+                // The guide ring breathes gently until contact
+                // lands (spec §2.1's soft pulsing ring). Decorative
+                // only: it must NEVER eat a touch — the pad below
+                // gets every press (review finding: the overlay sat
+                // above the pad in the press zone).
                 RoundedRectangle(cornerRadius: 28)
                     .strokeBorder(Color.inkPlum.opacity(0.35),
                                   style: StrokeStyle(lineWidth: 2, dash: [10, 8]))
                     .frame(width: 300, height: 380)
-                    .opacity(0.8)
+                    .opacity(sampleCount > 0 ? 1.0 : (padPulse ? 0.85 : 0.45))
+                    .scaleEffect(sampleCount > 0 ? 1.0 : (padPulse ? 1.012 : 0.995))
+                    .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true),
+                               value: padPulse)
+                    .allowsHitTesting(false)
                 Spacer()
                 Text(sampleCount == 0 ? "The pad is listening…"
                                       : "That's it — keep holding…")
                     .font(.system(.subheadline, design: .rounded))
                     .foregroundColor(.inkFaint)
+                    .allowsHitTesting(false)
                 HStack(spacing: 14) {
                     BigButton(title: "Cancel", secondary: true) {
                         phase = .setup
@@ -263,12 +275,13 @@ struct CaptureView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 18)
             }
-            .allowsHitTesting(true)
         }
         .onAppear {
             sampleCount = 0
             padControl.reset()
+            padPulse = true
         }
+        .onDisappear { padPulse = false }
     }
 
     private func finishPress(samples: [ContactSample], lifted: Bool) {

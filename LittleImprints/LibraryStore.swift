@@ -26,7 +26,19 @@ public final class LibraryStore: ObservableObject {
             library = decoded
         } else {
             if fm.fileExists(atPath: fileURL.path) {
-                loadError = "The keepsake book could not be read. Nothing was overwritten — please let us know."
+                // QUARANTINE before anything can overwrite: the
+                // unreadable original is copied aside untouched, so
+                // a corrupt read can never become a lost book when
+                // the next innocent edit saves over it. (Review
+                // finding: without this, one tap after a failed
+                // decode wiped the library behind a "nothing was
+                // overwritten" promise.)
+                let stamp = ISO8601DateFormatter().string(from: Date())
+                    .replacingOccurrences(of: ":", with: "-")
+                let aside = rootDir.appendingPathComponent(
+                    "library-quarantine-\(stamp).json")
+                try? fm.copyItem(at: fileURL, to: aside)
+                loadError = "The keepsake book could not be read, so it is starting empty here. The original file was set aside untouched as a safety copy inside the app's folder — nothing was overwritten, and the book can be recovered from it."
             }
             library = LibraryFile()
         }
@@ -149,11 +161,35 @@ public final class LibraryStore: ObservableObject {
         try? data.write(to: fileURL, options: [.atomic])
     }
 
+    /// Removes a child and everything in their book — their prints
+    /// (records + cached images) and their pages. Used by Settings'
+    /// delete, behind a confirmation there.
+    public func deleteChild(_ id: UUID) {
+        let doomed = library.prints.filter { $0.childID == id }.map(\.id)
+        mutate { lib in
+            lib.children.removeAll { $0.id == id }
+            lib.prints.removeAll { $0.childID == id }
+            lib.pages.removeAll { $0.childID == id }
+            if lib.activeChildID == id { lib.activeChildID = lib.children.first?.id }
+        }
+        for pid in doomed {
+            try? FileManager.default.removeItem(at: imageURL(for: pid))
+        }
+    }
+
     private func applyBackupPreference() {
-        var dir = rootDir
+        // Directory AND the files themselves: the Settings promise
+        // must hold at file level, not just folder level.
         var values = URLResourceValues()
         values.isExcludedFromBackup = library.settings.excludeFromBackup
+        var dir = rootDir
         try? dir.setResourceValues(values)
+        var imgDir = imagesDir
+        try? imgDir.setResourceValues(values)
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            var f = fileURL
+            try? f.setResourceValues(values)
+        }
     }
 }
 

@@ -68,7 +68,7 @@ struct GrowthTimelineView: View {
                     HStack(alignment: .bottom, spacing: 22) {
                         ForEach(prints) { record in
                             VStack(spacing: 6) {
-                                PrintThumb(record: record)
+                                TimelinePrint(record: record)
                                     .frame(width: CGFloat(record.shape.widthMM / mmpt) * CGFloat(effScale),
                                            height: CGFloat(record.shape.heightMM / mmpt) * CGFloat(effScale))
                                 Text(record.ageLabel)
@@ -125,10 +125,10 @@ struct GrowthTimelineView: View {
             .padding(.horizontal, 18)
             if let thenRec, let nowRec {
                 ZStack(alignment: .bottom) {
-                    PrintThumb(record: thenRec)
+                    TimelinePrint(record: thenRec)
                         .frame(width: CGFloat(thenRec.shape.widthMM / mmpt) * CGFloat(effScale),
                                height: CGFloat(thenRec.shape.heightMM / mmpt) * CGFloat(effScale))
-                    PrintThumb(record: nowRec)
+                    TimelinePrint(record: nowRec)
                         .frame(width: CGFloat(nowRec.shape.widthMM / mmpt) * CGFloat(effScale),
                                height: CGFloat(nowRec.shape.heightMM / mmpt) * CGFloat(effScale))
                         .opacity(0.55)
@@ -139,7 +139,7 @@ struct GrowthTimelineView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.lineSoft))
                 .padding(.horizontal, 18)
-                Text("\(thenRec.ageLabel) underneath, \(nowRec.ageLabel) on top — same scale, aligned at the heel.")
+                Text("\(thenRec.ageLabel) underneath, \(nowRec.ageLabel) on top — same scale, bottoms aligned.")
                     .font(.footnote)
                     .foregroundColor(.inkFaint)
                     .padding(.horizontal, 18)
@@ -170,6 +170,33 @@ struct GrowthTimelineView: View {
             .background(Color.paperCard)
             .clipShape(Capsule())
             .overlay(Capsule().stroke(Color.lineSoft))
+        }
+    }
+}
+
+/// A bare print for the timeline: NO card chrome, NO padding, NO
+/// forced aspect — the image is cropped to the print's own bounding
+/// box, so when the caller frames it at the print's true point size
+/// the ink on screen IS that size, which is what the scale label
+/// claims. (The book's PrintThumb pads and letterboxes inside a
+/// card; using it here made the label overstate the ink by ~20% —
+/// review finding.) Rendered as pressed: kept rotation is a
+/// presentation adjustment, and growth comparison is honest in the
+/// as-pressed geometry the millimetres describe.
+private struct TimelinePrint: View {
+    let record: PrintRecord
+    @State private var img: UIImage? = nil
+
+    var body: some View {
+        ZStack {
+            if let img {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+            }
+        }
+        .task(id: record.id) {
+            img = PrintRenderer.exactCroppedImage(for: record, longEdgePx: 700)
         }
     }
 }
