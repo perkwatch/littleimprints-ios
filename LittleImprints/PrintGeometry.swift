@@ -375,41 +375,47 @@ public enum PrintBuild {
         }
         let palmSpot = norm(prior.palm)
         let digitSpots = prior.digits.map(norm)
-        // Try both orientations, and — because a missing digit
-        // shrinks the mask's own box at the digit end — a small
-        // search of top extensions of the frame. Scored by how
-        // coherently the anatomy reads (palm coverage + digits
-        // clearly present); a fill is only ever taken from the
-        // best-scoring coherent mapping. (First cut mapped the
-        // prior into the raw mask box: with one toe gone every
-        // ellipse shifted, nothing read as missing, and with two
-        // gone a wrong mapping could read exactly one as missing.)
+        // Try both orientations over a small search of frame
+        // placements: a missing digit shrinks the mask's own box on
+        // its side (the pinky shortens the top; the big toe pulls
+        // the left edge in), shifting every mapped ellipse. Each
+        // candidate mapping is scored by how coherently the anatomy
+        // reads (palm coverage + digits clearly present), with a
+        // penalty for distance from the unshifted frame so a plain
+        // mapping always beats an exotic one; a fill is only ever
+        // taken from the best-scoring coherent mapping. (Probe
+        // 41349609353: with the big toe gone, the second toe read
+        // 0.34 — present but shifted into the ambiguous band.)
         var best: (missing: Int, mirror: Bool, origin: Point2, w: Double, hh: Double)? = nil
         var bestScore = -1.0
         for mirror in [false, true] {
-            for extFrac in [0.0, 0.06, 0.12, 0.18, 0.24] {
-                let ext = frameH * extFrac
-                let o = Point2(frameOrigin.x, frameOrigin.y - ext)
-                let fh = frameH + ext
-                let palmCov = ellipseCoverage(mask: mask, nx: nx, ny: ny, h: h,
-                                              frameOrigin: o, frameW: frameW, frameH: fh,
-                                              spot: palmSpot, mirrorX: mirror)
-                guard palmCov >= 0.45 else { continue }
-                var missing: [Int] = []
-                var present = 0
-                for (idx, d) in digitSpots.enumerated() {
-                    let cov = ellipseCoverage(mask: mask, nx: nx, ny: ny, h: h,
-                                              frameOrigin: o, frameW: frameW, frameH: fh,
-                                              spot: d, mirrorX: mirror)
-                    if cov <= 0.15 { missing.append(idx) }
-                    else if cov < 0.55 { missing.append(-1) } // ambiguous — blocks
-                    else { present += 1 }
-                }
-                guard missing.count == 1, missing[0] >= 0 else { continue }
-                let score = palmCov + 0.1 * Double(present)
-                if score > bestScore {
-                    bestScore = score
-                    best = (missing[0], mirror, o, frameW, fh)
+            for extFrac in [0.0, 0.06, 0.12] {
+                for dxFrac in [-0.08, -0.04, 0.0, 0.04, 0.08] {
+                    let ext = frameH * extFrac
+                    let o = Point2(frameOrigin.x + dxFrac * frameW,
+                                   frameOrigin.y - ext)
+                    let fh = frameH + ext
+                    let palmCov = ellipseCoverage(mask: mask, nx: nx, ny: ny, h: h,
+                                                  frameOrigin: o, frameW: frameW, frameH: fh,
+                                                  spot: palmSpot, mirrorX: mirror)
+                    guard palmCov >= 0.45 else { continue }
+                    var missing: [Int] = []
+                    var present = 0
+                    for (idx, d) in digitSpots.enumerated() {
+                        let cov = ellipseCoverage(mask: mask, nx: nx, ny: ny, h: h,
+                                                  frameOrigin: o, frameW: frameW, frameH: fh,
+                                                  spot: d, mirrorX: mirror)
+                        if cov <= 0.15 { missing.append(idx) }
+                        else if cov < 0.55 { missing.append(-1) } // ambiguous — blocks
+                        else { present += 1 }
+                    }
+                    guard missing.count == 1, missing[0] >= 0 else { continue }
+                    let score = palmCov + 0.1 * Double(present)
+                        - 2.0 * (extFrac + abs(dxFrac))
+                    if score > bestScore {
+                        bestScore = score
+                        best = (missing[0], mirror, o, frameW, fh)
+                    }
                 }
             }
         }
