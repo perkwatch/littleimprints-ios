@@ -604,41 +604,65 @@ public enum PrintBuild {
     // MARK: - Polyline cleanup
 
     static func douglasPeucker(_ pts: [Point2], epsilon: Double) -> [Point2] {
-        guard pts.count > 2 else { return pts }
-        // Closed loop: anchor at the point farthest from centroid,
-        // split the loop there, run the open-polyline algorithm.
+        guard pts.count > 4 else { return pts }
+        // Closed loop: split at two anchors — farthest from the
+        // centroid, then farthest from that — and simplify each arc
+        // as an open polyline. (Running the open algorithm on the
+        // loop with coincident endpoints collapses it to a point:
+        // the A→B chord has zero length, so every distance reads 0.
+        // Found by the pure harness, run 41348153739's probe.)
         var cx = 0.0, cy = 0.0
         for p in pts { cx += p.x; cy += p.y }
         let c = Point2(cx / Double(pts.count), cy / Double(pts.count))
-        var anchor = 0, bestD = -1.0
+        var anchorA = 0, bestD = -1.0
         for (i, p) in pts.enumerated() {
             let d = p.distance(to: c)
-            if d > bestD { bestD = d; anchor = i }
+            if d > bestD { bestD = d; anchorA = i }
         }
-        var open = Array(pts[anchor...]) + Array(pts[..<anchor])
-        open.append(open[0])
-        var keep = [Bool](repeating: false, count: open.count)
-        keep[0] = true; keep[open.count - 1] = true
-        var stack: [(Int, Int)] = [(0, open.count - 1)]
-        while let (a, b) = stack.popLast() {
-            guard b > a + 1 else { continue }
-            let pa = open[a], pb = open[b]
-            let ab = pb - pa
-            let len = max(ab.length, 0.0001)
-            var maxD = 0.0, maxI = -1
-            for i in (a + 1)..<b {
-                let ap = open[i] - pa
-                let cross = abs(ab.x * ap.y - ab.y * ap.x) / len
-                if cross > maxD { maxD = cross; maxI = i }
-            }
-            if maxD > epsilon, maxI > 0 {
-                keep[maxI] = true
-                stack.append((a, maxI))
-                stack.append((maxI, b))
-            }
+        var anchorB = 0
+        bestD = -1
+        for (i, p) in pts.enumerated() {
+            let d = p.distance(to: pts[anchorA])
+            if d > bestD { bestD = d; anchorB = i }
         }
-        var out = open.enumerated().filter { keep[$0.offset] }.map(\.element)
-        if out.count > 1, out.first == out.last { out.removeLast() }
+        func arc(_ from: Int, _ to: Int) -> [Point2] {
+            var out: [Point2] = []
+            var i = from
+            while true {
+                out.append(pts[i])
+                if i == to { break }
+                i = (i + 1) % pts.count
+            }
+            return out
+        }
+        func simplify(_ line: [Point2]) -> [Point2] {
+            guard line.count > 2 else { return line }
+            var keep = [Bool](repeating: false, count: line.count)
+            keep[0] = true; keep[line.count - 1] = true
+            var stack: [(Int, Int)] = [(0, line.count - 1)]
+            while let (a, b) = stack.popLast() {
+                guard b > a + 1 else { continue }
+                let pa = line[a], pb = line[b]
+                let ab = pb - pa
+                let len = max(ab.length, 0.0001)
+                var maxD = 0.0, maxI = -1
+                for i in (a + 1)..<b {
+                    let ap = line[i] - pa
+                    let cross = abs(ab.x * ap.y - ab.y * ap.x) / len
+                    if cross > maxD { maxD = cross; maxI = i }
+                }
+                if maxD > epsilon, maxI > 0 {
+                    keep[maxI] = true
+                    stack.append((a, maxI))
+                    stack.append((maxI, b))
+                }
+            }
+            return line.enumerated().filter { keep[$0.offset] }.map(\.element)
+        }
+        let arc1 = simplify(arc(anchorA, anchorB))
+        let arc2 = simplify(arc(anchorB, anchorA))
+        var out = arc1
+        if arc2.count > 2 { out += arc2.dropFirst().dropLast() }
         return out
     }
 
