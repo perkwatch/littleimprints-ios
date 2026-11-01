@@ -248,9 +248,11 @@ public enum PageRenderer {
                              width: ts.width + 20, height: ts.height + 10)
             uiColor.setStroke()
             cg.setLineWidth(1.6)
-            cg.stroke(RoundedRectPath(box, radius: 6))
+            cg.addPath(RoundedRectPath(box, radius: 6))
+            cg.strokePath()
             cg.setLineWidth(1)
-            cg.stroke(RoundedRectPath(box.insetBy(dx: -3, dy: -3), radius: 9))
+            cg.addPath(RoundedRectPath(box.insetBy(dx: -3, dy: -3), radius: 9))
+            cg.strokePath()
             s.draw(in: CGRect(x: -ts.width / 2, y: -ts.height / 2, width: ts.width, height: ts.height),
                    withAttributes: attrs)
         case .frame:
