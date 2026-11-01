@@ -353,6 +353,28 @@ public enum PrintBuild {
         guard frameW > 10, frameH > 10 else { return false }
 
         let prior = shapePrior(kind: kind, ageMonths: ageMonths)
+        // CRITICAL: prior positions are fractions of the unit
+        // square, but the mask's box is the OUTLINE's box (the foot
+        // outline spans only x 0.17…0.78, y 0.03…0.99 of the unit
+        // square). Normalize every spot by the prior outline's own
+        // bounding box, or each ellipse lands shifted inside the
+        // covered mass and a missing toe reads as present. (Probe
+        // 41349200738: missing pinky read 1.00 covered, unnormalized.)
+        var oMinX = Double.greatestFiniteMagnitude, oMinY = oMinX
+        var oMaxX = -oMinX, oMaxY = -oMinX
+        for p in prior.outline {
+            oMinX = min(oMinX, p.x); oMaxX = max(oMaxX, p.x)
+            oMinY = min(oMinY, p.y); oMaxY = max(oMaxY, p.y)
+        }
+        let oW = max(oMaxX - oMinX, 0.0001), oH = max(oMaxY - oMinY, 0.0001)
+        func norm(_ spot: DigitSpot) -> DigitSpot {
+            DigitSpot(center: Point2((spot.center.x - oMinX) / oW,
+                                     (spot.center.y - oMinY) / oH),
+                      radii: Point2(spot.radii.x / oW, spot.radii.y / oH),
+                      angleDeg: spot.angleDeg)
+        }
+        let palmSpot = norm(prior.palm)
+        let digitSpots = prior.digits.map(norm)
         // Try both orientations, and — because a missing digit
         // shrinks the mask's own box at the digit end — a small
         // search of top extensions of the frame. Scored by how
@@ -371,16 +393,16 @@ public enum PrintBuild {
                 let fh = frameH + ext
                 let palmCov = ellipseCoverage(mask: mask, nx: nx, ny: ny, h: h,
                                               frameOrigin: o, frameW: frameW, frameH: fh,
-                                              spot: prior.palm, mirrorX: mirror)
+                                              spot: palmSpot, mirrorX: mirror)
                 guard palmCov >= 0.45 else { continue }
                 var missing: [Int] = []
                 var present = 0
-                for (idx, d) in prior.digits.enumerated() {
+                for (idx, d) in digitSpots.enumerated() {
                     let cov = ellipseCoverage(mask: mask, nx: nx, ny: ny, h: h,
                                               frameOrigin: o, frameW: frameW, frameH: fh,
                                               spot: d, mirrorX: mirror)
                     if cov <= 0.15 { missing.append(idx) }
-                    else if cov < 0.40 { missing.append(-1) } // ambiguous — blocks
+                    else if cov < 0.55 { missing.append(-1) } // ambiguous — blocks
                     else { present += 1 }
                 }
                 guard missing.count == 1, missing[0] >= 0 else { continue }
@@ -392,7 +414,7 @@ public enum PrintBuild {
             }
         }
         guard let fill = best else { return false }
-        let spot = prior.digits[fill.missing]
+        let spot = digitSpots[fill.missing]
         let cx = fill.origin.x + (fill.mirror ? 1 - spot.center.x : spot.center.x) * fill.w
         let cy = fill.origin.y + spot.center.y * fill.hh
         let rx = max(spot.radii.x * fill.w * 0.92, 2)
