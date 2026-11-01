@@ -313,7 +313,12 @@ public enum PrintBuild {
         let steps = 14
         for a in 0...steps {
             for b in 0...steps {
-                let rr = Double(a) / Double(steps)
+                // CORE sampling only (inner 55%): contact from the
+                // surrounding press bleeds roughly one blob-radius
+                // inward across a missing digit's rim, so whole-
+                // ellipse coverage reads a missing toe as half
+                // present. The core stays clean either way.
+                let rr = Double(a) / Double(steps) * 0.55
                 let th = Double(b) / Double(steps) * 2 * Double.pi
                 let lx = cos(th) * rr * rx, ly = sin(th) * rr * ry
                 let px = cx + lx * cosA - ly * sinA
