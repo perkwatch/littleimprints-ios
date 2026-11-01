@@ -222,8 +222,9 @@ struct PrintDetailView: View {
                                              at: record.createdAt).first ?? ""
             }
             DispatchQueue.global(qos: .userInitiated).async {
+                let native = ScreenMetrics.wallpaperPixelSize
                 let img = PrintRenderer.image(for: record, background: InkColor(hex: "#FFFDF6"),
-                                              longEdgePx: 1400)
+                                              longEdgePx: max(2048, Int(max(native.width, native.height))))
                 DispatchQueue.main.async { bigImage = img }
             }
         }

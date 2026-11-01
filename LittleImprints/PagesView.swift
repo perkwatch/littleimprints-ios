@@ -168,7 +168,7 @@ struct PageEditorView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: w, height: w * img.size.height / max(img.size.width, 1))
-                            .rotationEffect(.degrees(placed.rotationDeg + record.rotationDeg))
+                            .rotationEffect(.degrees(placed.rotationDeg))
                             .position(x: pw * placed.center.x, y: ph * placed.center.y)
                             .onTapGesture { selection = .print(placed.id) }
                             .gesture(dragGesture(for: .print(placed.id), pageSize: CGSize(width: pw, height: ph)) {
@@ -191,7 +191,7 @@ struct PageEditorView: View {
                             .stroke(Color.inkPlum, style: StrokeStyle(lineWidth: 1.6, dash: [5, 4]))
                             .frame(width: w + 10,
                                    height: w * img.size.height / max(img.size.width, 1) + 10)
-                            .rotationEffect(.degrees(placed.rotationDeg + record.rotationDeg))
+                            .rotationEffect(.degrees(placed.rotationDeg))
                             .position(x: pw * placed.center.x, y: ph * placed.center.y)
                             .allowsHitTesting(false)
                     }
