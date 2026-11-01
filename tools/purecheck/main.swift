@@ -1,6 +1,6 @@
-// check-pure.swift — the pure-logic laws of Little Imprints, pinned.
+// main.swift (purecheck) — the pure-logic laws of Little Imprints, pinned.
 // Compiled and run WITHOUT the app target (Foundation only):
-//   swiftc -O LittleImprints/{Geo,RNG,InkColor,AgeCalc,Silhouettes,PrintGeometry}.swift tools/check-pure.swift -o /tmp/check-pure && /tmp/check-pure
+//   swiftc -O LittleImprints/{Geo,RNG,InkColor,AgeCalc,Silhouettes,PrintGeometry}.swift tools/purecheck/main.swift -o /tmp/check-pure && /tmp/check-pure
 // Runs locally and as a CI step. Every failure prints and exits 1.
 
 import Foundation
